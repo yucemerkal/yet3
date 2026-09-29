@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kelime Kartları</title>
+<style>
+:root{--bg:#F1EFFB;--ink:#1B1740;--mut:#6E6A94;--card:#fff;--acc:#5B3DF5;--bad:#D93A45;--ok:#178A4B;--line:#DDD9F3}
+@media(prefers-color-scheme:dark){:root{--bg:#14112B;--ink:#EEEAFF;--mut:#A29DCB;--card:#211D45;--acc:#8E78FF;--bad:#FF6B75;--ok:#4CD68A;--line:#332E63}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px system-ui,sans-serif}
+#app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+main{flex:1;overflow:auto;padding:16px 0}
+nav{display:flex;gap:6px;padding:8px 0 12px}
+nav button{flex:1;padding:12px;border:0;border-radius:12px;background:transparent;color:var(--mut);font-weight:600;font-size:15px}
+nav button.on{background:var(--acc);color:#fff}
+h2{margin:0 0 12px;font-size:22px}
+.card{background:var(--card);border-radius:20px;border:1px solid var(--line)}
+.flash{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;cursor:pointer}
+.word{font:600 34px Georgia,serif;word-break:break-word}
+.hint{color:var(--mut);margin-top:14px;font-size:14px}
+.row{display:flex;gap:10px;margin-top:14px}
+.btn{flex:1;padding:16px;border:0;border-radius:14px;font-size:16px;font-weight:700;color:#fff;background:var(--acc)}
+.btn.bad{background:var(--bad)}.btn.ok{background:var(--ok)}.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-bottom:14px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc)}
+textarea,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit}
+textarea{min-height:110px}
+.item{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.item:last-child{border:0}.item small{color:var(--mut)}
+.x{border:0;background:none;color:var(--mut);font-size:20px;padding:4px 10px}
+.badge{background:var(--bad);color:#fff;border-radius:10px;padding:2px 9px;font-size:13px;font-weight:700}
+.mut{color:var(--mut)}.big{font-size:44px;font-weight:700}
+</style></head><body><div id="app"><main id="v"></main>
+<nav><button data-t="study">Çalış</button><button data-t="words">Kelimeler</button><button data-t="wrong">Hatalar</button></nav></div>
+<script>
+const $=s=>document.querySelector(s);
+const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let words=load('words',[]), set=load('set',{dir:'en',n:20}), sess=load('sess',null), tab='study', flipped=false, onlyWrong=false;
+const today=()=>new Date().toISOString().slice(0,10);
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function rng(seed){let h=0;for(const c of seed)h=Math.imul(31,h)+c.charCodeAt(0)|0;return()=>{h|=0;h=h+0x6D2B79F5|0;let t=Math.imul(h^h>>>15,1|h);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function shuffle(a,r){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function build(wrongOnly){
+  const d=today(), r=rng(d+(wrongOnly?'w':'')+words.length);
+  const bad=shuffle(words.filter(w=>w.wrong>0),r), rest=shuffle(words.filter(w=>!w.wrong),r);
+  const ids=(wrongOnly?bad:[...bad,...rest]).slice(0,wrongOnly?bad.length:set.n).map(w=>w.id);
+  sess={date:d,wrongOnly,ids:shuffle(ids,r),i:0,miss:[]};save('sess',sess)}
+function parse(text){
+  let n=0;const seps=['\t',';','=','|',' - ',','];
+  text.replace(/^\uFEFF/,'').split(/\r?\n/).forEach(l=>{
+    l=l.trim();if(!l)return;
+    for(const s of seps){const k=l.indexOf(s);if(k>0){
+      const en=l.slice(0,k).trim(),tr=l.slice(k+s.length).trim().replace(/^["']|["']$/g,'');
+      if(en&&tr&&!words.some(w=>w.en.toLowerCase()===en.toLowerCase())){words.push({id:Date.now()+Math.random(),en,tr,wrong:0,right:0});n++}
+      break}}});
+  save('words',words);return n}
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  $('#v').innerHTML={study,words:wordsView,wrong:wrongView}[tab]()}
+function study(){
+  if(!words.length)return `<h2>Hoş geldin</h2><p class="mut">Önce "Kelimeler" sekmesinden kelime ekle ya da dosya yükle.</p>`;
+  if(!sess||sess.date!==today()||(sess.wrongOnly!==onlyWrong&&sess.i===0))build(onlyWrong);
+  const byId=id=>words.find(w=>w.id===id);
+  if(sess.i>=sess.ids.length){
+    const m=sess.miss.map(byId).filter(Boolean);
+    return `<h2>Bugünkü tur bitti</h2><div class="card" style="padding:20px;text-align:center"><div class="big">${sess.ids.length-m.length}/${sess.ids.length}</div><div class="mut">doğru</div></div>
+    ${m.length?`<h2 style="margin-top:20px">Hata yaptıkların</h2><div class="card">${m.map(w=>`<div class="item"><b>${esc(w.en)}</b><span>${esc(w.tr)}</span></div>`).join('')}</div>`:'<p class="mut">Hiç hata yok, harika.</p>'}
+    <div class="row"><button class="btn ghost" onclick="again(false)">Yeni tur</button>${words.some(w=>w.wrong)?'<button class="btn" onclick="again(true)">Hatalıları çalış</button>':''}</div>`}
+  const w=byId(sess.ids[sess.i]);if(!w){sess.i++;save('sess',sess);return study()}
+  const q=set.dir==='en'?w.en:w.tr, a=set.dir==='en'?w.tr:w.en;
+  return `<div class="bar"><i style="width:${sess.i/sess.ids.length*100}%"></i></div>
+  <div class="mut" style="margin-bottom:8px">${sess.i+1} / ${sess.ids.length}${sess.wrongOnly?' · hatalı kelimeler':''}</div>
+  <div class="card flash" onclick="flipped=true;render()"><div class="word">${esc(flipped?a:q)}</div>
+  ${flipped?`<div class="hint">${esc(q)}</div>`:'<div class="hint">Cevabı görmek için dokun</div>'}</div>
+  ${flipped?`<div class="row"><button class="btn bad" onclick="ans(false)">Bilemedim</button><button class="btn ok" onclick="ans(true)">Bildim</button></div>`:''}
+  <div style="margin-top:18px"><select onchange="set.dir=this.value;save('set',set);flipped=false;render()">
+  <option value="en" ${set.dir==='en'?'selected':''}>İngilizce → Türkçe</option><option value="tr" ${set.dir==='tr'?'selected':''}>Türkçe → İngilizce</option></select></div>`}
+function again(w){onlyWrong=w;build(w);flipped=false;render()}
+function ans(ok){const id=sess.ids[sess.i],w=words.find(x=>x.id===id);
+  if(ok)w.right++;else{w.wrong++;sess.miss.push(id)}
+  sess.i++;flipped=false;save('words',words);save('sess',sess);render()}
+function wordsView(){
+  return `<h2>Kelime ekle</h2>
+  <textarea id="ta" placeholder="Her satıra bir kelime:&#10;apple,elma&#10;to give up - vazgeçmek"></textarea>
+  <div class="row"><button class="btn" onclick="add()">Ekle</button>
+  <label class="btn ghost" style="text-align:center">Dosya yükle<input type="file" accept=".txt,.csv,text/*" hidden onchange="file(this)"></label></div>
+  <div class="row" style="align-items:center"><span class="mut">Günlük kelime sayısı</span>
+  <select style="width:90px" onchange="set.n=+this.value;save('set',set);sess=null">${[10,20,30,50,100].map(n=>`<option ${set.n===n?'selected':''}>${n}</option>`).join('')}</select></div>
+  <h2 style="margin-top:22px">Tüm kelimeler (${words.length})</h2>
+  <div class="card">${words.map(w=>`<div class="item"><div><b>${esc(w.en)}</b><br><small>${esc(w.tr)}</small></div><button class="x" onclick="del(${w.id})">×</button></div>`).join('')||'<div class="item mut">Henüz kelime yok</div>'}</div>
+  ${words.length?'<div class="row"><button class="btn ghost" onclick="clearAll()">Hepsini sil</button></div>':''}`}
+function add(){const n=parse($('#ta').value);sess=null;alert(n+' kelime eklendi');render()}
+function file(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const n=parse(r.result);sess=null;alert(n+' kelime eklendi');render()};r.readAsText(f,'utf-8')}
+function del(id){words=words.filter(w=>w.id!==id);save('words',words);sess=null;render()}
+function clearAll(){if(confirm('Tüm kelimeler silinsin mi?')){words=[];sess=null;save('words',words);save('sess',null);render()}}
+function wrongView(){
+  const l=words.filter(w=>w.wrong>0).sort((a,b)=>b.wrong-a.wrong);
+  if(!l.length)return `<h2>Hatalar</h2><p class="mut">Henüz hata yaptığın kelime yok.</p>`;
+  return `<h2>Hata yaptıkların (${l.length})</h2><div class="card">${l.map(w=>`<div class="item"><div><b>${esc(w.en)}</b><br><small>${esc(w.tr)}</small></div><span class="badge">${w.wrong} hata</span></div>`).join('')}</div>
+  <div class="row"><button class="btn" onclick="tab='study';again(true)">Sadece bunları çalış</button></div>
+  <div class="row"><button class="btn ghost" onclick="l=0;words.forEach(w=>w.wrong=0);save('words',words);render()">Hata sayaçlarını sıfırla</button></div>`}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+render();
+</script></body></html>
